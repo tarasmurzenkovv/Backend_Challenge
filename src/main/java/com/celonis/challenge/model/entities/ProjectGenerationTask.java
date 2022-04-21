@@ -1,4 +1,4 @@
-package com.celonis.challenge.model;
+package com.celonis.challenge.model.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.hibernate.annotations.GenericGenerator;

@@ -1,45 +1,40 @@
 package com.celonis.challenge.services;
 
-import com.celonis.challenge.exceptions.InternalException;
-import com.celonis.challenge.model.ProjectGenerationTask;
-import com.celonis.challenge.model.ProjectGenerationTaskRepository;
+import com.celonis.challenge.model.entities.ProjectGenerationTask;
+import com.celonis.challenge.repositories.ProjectGenerationTaskRepository;
 import org.apache.commons.io.IOUtils;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.io.*;
 import java.net.URL;
 
-@Component
+@Service
+// there are multiple ways to fix spring boot cyclic dependency issue
+// 1. autowire bean in setter: cons autowiring via setter is less prefferable that via constructor
+// 2. declare bean as @Lazy: no need for lazy functionality
+// 3. use @PostConstruct : cons this annotation is used to lately init bean
+// 4. implement ApplicationContextAware and InitializingBean: cons -- overkill
+// 5. refactor -- I will use this option
 public class FileService {
-
-    private final TaskService taskService;
-
     private final ProjectGenerationTaskRepository projectGenerationTaskRepository;
 
-    public FileService(TaskService taskService,
-                       ProjectGenerationTaskRepository projectGenerationTaskRepository) {
-        this.taskService = taskService;
+    public FileService(ProjectGenerationTaskRepository projectGenerationTaskRepository) {
         this.projectGenerationTaskRepository = projectGenerationTaskRepository;
     }
 
-    public FileSystemResource getTaskResult(String taskId) {
-        ProjectGenerationTask projectGenerationTask = taskService.getTask(taskId);
-        File inputFile = new File(projectGenerationTask.getStorageLocation());
+    // TODO: should be replaced by URL
+    public FileSystemResource getTaskResult(String fileLocation) {
+        File inputFile = new File(fileLocation);
 
         if (!inputFile.exists()) {
-            throw new InternalException("File not generated yet");
+            throw new IllegalArgumentException(String.format("File with file location '%s' not generated yet", fileLocation));
         }
 
         return new FileSystemResource(inputFile);
     }
 
-    public void storeResult(String taskId, URL url) throws IOException {
-        ProjectGenerationTask projectGenerationTask = taskService.getTask(taskId);
+    public void storeResult(String taskId, URL url, ProjectGenerationTask projectGenerationTask) throws IOException {
         File outputFile = File.createTempFile(taskId, ".zip");
         outputFile.deleteOnExit();
         projectGenerationTask.setStorageLocation(outputFile.getAbsolutePath());

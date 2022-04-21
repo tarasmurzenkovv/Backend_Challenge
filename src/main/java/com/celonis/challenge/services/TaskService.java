@@ -2,14 +2,13 @@ package com.celonis.challenge.services;
 
 import com.celonis.challenge.exceptions.InternalException;
 import com.celonis.challenge.exceptions.NotFoundException;
-import com.celonis.challenge.model.ProjectGenerationTask;
-import com.celonis.challenge.model.ProjectGenerationTaskRepository;
+import com.celonis.challenge.model.entities.ProjectGenerationTask;
+import com.celonis.challenge.repositories.ProjectGenerationTaskRepository;
 import org.springframework.stereotype.Service;
 
 import java.net.URL;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class TaskService {
@@ -17,7 +16,7 @@ public class TaskService {
     private final ProjectGenerationTaskRepository projectGenerationTaskRepository;
 
     private final FileService fileService;
-    
+
     public TaskService(ProjectGenerationTaskRepository projectGenerationTaskRepository,
                        FileService fileService) {
         this.projectGenerationTaskRepository = projectGenerationTaskRepository;
@@ -34,12 +33,8 @@ public class TaskService {
         return projectGenerationTaskRepository.save(projectGenerationTask);
     }
 
-    public ProjectGenerationTask getTask(String taskId) {
-        return get(taskId);
-    }
-
     public ProjectGenerationTask update(String taskId, ProjectGenerationTask projectGenerationTask) {
-        ProjectGenerationTask existing = get(taskId);
+        ProjectGenerationTask existing = getTask(taskId);
         existing.setCreationDate(projectGenerationTask.getCreationDate());
         existing.setName(projectGenerationTask.getName());
         return projectGenerationTaskRepository.save(existing);
@@ -52,17 +47,18 @@ public class TaskService {
     public void executeTask(String taskId) {
         URL url = Thread.currentThread().getContextClassLoader().getResource("challenge.zip");
         if (url == null) {
-            throw new InternalException("Zip file not found");
+            throw new NotFoundException(String.format("Zip file not found for task '%s'", taskId));
         }
         try {
-            fileService.storeResult(taskId, url);
+            ProjectGenerationTask projectGenerationTask = projectGenerationTaskRepository.getOne(taskId);
+            fileService.storeResult(taskId, url, projectGenerationTask);
         } catch (Exception e) {
             throw new InternalException(e);
         }
     }
 
-    private ProjectGenerationTask get(String taskId) {
-        Optional<ProjectGenerationTask> projectGenerationTask = projectGenerationTaskRepository.findById(taskId);
-        return projectGenerationTask.orElseThrow(NotFoundException::new);
+    public ProjectGenerationTask getTask(String taskId) {
+        return projectGenerationTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException(String.format("Task with id '%s' is not found", taskId)));
     }
 }

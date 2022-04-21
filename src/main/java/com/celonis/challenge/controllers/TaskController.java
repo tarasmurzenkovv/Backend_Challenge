@@ -1,6 +1,6 @@
 package com.celonis.challenge.controllers;
 
-import com.celonis.challenge.model.ProjectGenerationTask;
+import com.celonis.challenge.model.entities.ProjectGenerationTask;
 import com.celonis.challenge.services.FileService;
 import com.celonis.challenge.services.TaskService;
 import org.springframework.core.io.FileSystemResource;
@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 import java.util.List;
+
+import static org.springframework.http.HttpStatus.OK;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -28,21 +30,25 @@ public class TaskController {
     }
 
     @GetMapping("/")
+    @ResponseStatus(OK)
     public List<ProjectGenerationTask> listTasks() {
         return taskService.listTasks();
     }
 
     @PostMapping("/")
+    @ResponseStatus(OK)
     public ProjectGenerationTask createTask(@RequestBody @Valid ProjectGenerationTask projectGenerationTask) {
         return taskService.createTask(projectGenerationTask);
     }
 
     @GetMapping("/{taskId}")
+    @ResponseStatus(OK)
     public ProjectGenerationTask getTask(@PathVariable String taskId) {
         return taskService.getTask(taskId);
     }
 
     @PutMapping("/{taskId}")
+    @ResponseStatus(OK)
     public ProjectGenerationTask updateTask(@PathVariable String taskId,
                                             @RequestBody @Valid ProjectGenerationTask projectGenerationTask) {
         return taskService.update(taskId, projectGenerationTask);
@@ -55,17 +61,22 @@ public class TaskController {
     }
 
     @PostMapping("/{taskId}/execute")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @ResponseStatus(HttpStatus.CREATED)
     public void executeTask(@PathVariable String taskId) {
         taskService.executeTask(taskId);
     }
 
     @GetMapping("/{taskId}/result")
     public ResponseEntity<FileSystemResource> getResult(@PathVariable String taskId) {
+        HttpHeaders respHeaders = getHttpHeaders();
+        ProjectGenerationTask task = taskService.getTask(taskId);
+        return new ResponseEntity<>(fileService.getTaskResult(task.getStorageLocation()), respHeaders,  OK);
+    }
+
+    private HttpHeaders getHttpHeaders() {
         HttpHeaders respHeaders = new HttpHeaders();
         respHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         respHeaders.setContentDispositionFormData("attachment", "challenge.zip");
-        return new ResponseEntity<>(fileService.getTaskResult(taskId), respHeaders)
+        return respHeaders;
     }
-
 }

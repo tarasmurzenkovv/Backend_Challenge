@@ -1,67 +1,78 @@
-# Celonis Programming Challenge
+Points of improvements
 
-Dear applicant,
+1. Security:
+   1. Introduce separate service to handle user authetntication and authorization
+   2. Use JWT for stateless security
+   3. Create user roles and use these roles to refine access to controllers
+   4. We allow CORS for all HTTP methods and for all URLs. We need to narrow scope.
+   5. OPTIONS should always work  -- why?????
+   6. Define separate bean to use in testing or based on profile
+2. Observability
+   1. Add logging to std.out
+   2. Spring Boot already exposes health and readiness checks --> adapt them to Graphana format?
+3. API
+   1. Documenation
+   2. Pagination for get requests
+   3. Mb reactive approach?
+   4. Caching requests
+   5. Throttling
+   6. error responses: do not return plain strings, return pojos with clear error descriptions and urls of resources,
+   user ids
+4. Deployment
+   1. create CD pipeline (Jenkins/Circle CI/GithubAction?)
+   2. move all configurations as env variables
+   3. create distroless docker image or use jib
+   4. create k8s config files (ingress/service/deployment, latter blue-green or canary)
+   5. Follow 12 factor principles
+5. Testing
+   1. I covered only SummationTaskController by integration test: needs to be covered by tests all other services/controllers
+   2. Need for load tests
+6. DB 
+   1. Introduce flyway migration
+   2. REad/write replicas
+   3. indexes when appropriate
+   4. do update in batches to minimize transaction time
+   5. hibernate: choose another sequence generator e.x. hi-lo (?)
+7. Service
+   1. FileService::storeFile is not transactional
 
-Congratulations, you made it to the Celonis Programming Challenge!
+The current implementation is not scalable. I suggest the following architecture based on 
+- competing consumers patter
+- event driven approach. 
+- caching requests
 
-The challenge itself should be timeboxed to 3 hours. This means you should not work longer than that on the completion.
-If you can't make all points within the timeframe this is _not_ an issue. We will be happy to discuss any problems and ideas during the Challenge Interview.
-
-Why do we ask you to complete this challenge?
-
-First of all, we need to have some way of comparing different applicants, and we try to answer certain questions which
-we cannot out-right ask in an interview - also we don't want to ask too many technical questions
-in a face-to-face interview to not be personally biased in a potentially stressful situation.
-To be as transparent as possible, we want to give you some insights into what we look at and how we evaluate.
-This challenge gives you the possibility to shine :)
-
-Note that there is nothing wrong with googling when you have certain questions or are unsure about some APIs,
-but you should not outright copy code. If you decide to copy code, please mark it as such, citing the source.
-
-## Complete and extend a java application
-
-For this challenge, you have received a project which has a few problems.
-You first have to fix those problems in order to get the application running, and then you should extend it with the requirements below.
-
-What we are looking into:
-  - Understanding and implementation of a specification
-  - Java implementation skills (Java 11, Spring Boot)
-  - Multithreading / locking execution
-  - **Note**: performance and scalability are important, please apply reasonable balance between solution performance and invested time
-
-      We expect to do some demo during the next technical interview,
-      so please ensure the API works and prepare some mocks
-      (Postman, curl or any preferred HTTP/REST tools)
-
-How to understand the task:
-  - consider the provided challenge as an application with some existing functionality,
-    which was used to "generate" a file and download it
-  - fix current issues to make the application runnable
-  - keep existing behavior and API. Refactorings are allowed and welcome
-  - extend and generalize the supplied sources according to the description below
+1. Introduce the following service: 
+   1. API Gateway, 
+   2. Customer AUTH, 
+   3. Task Submitter, 
+   4. Task Processor
+   5. Task Status Provider
+2. Use as the service: Redis Cached, SQL with master-slave replication (if scalable and if complex data integrity is needed), S3 to store files, 
+Debesium to poll transaction log + send events, Queue
 
 
-### Task 1: Dependency injection
+1. API Gateway:
+   1. Is the gateway to all three service: Submitter, Processor, Status Provider
+   2. Implemented in reactive fashion
+   3. Delegate customer auth to customer auth service 
 
-The project you received fails to start correctly due to a problem in the dependency injection.
-Identify that problem and fix it.
-
-### Task 2: Extend the application
-
-The task is to extend the current functionality of the backend by
-- implementing a new task type
-- showing the progress of the task execution
-- implementing a task cancellation mechanism.
-
-The new task type is a simple counter which is configured with two input parameters, `x` and `y` of type `integer`.
-When the task is executed, counter should start in the background and progress should be monitored.
-Counting should start from `x` and get increased by one every second.
-When counting reaches `y`, the task should finish successfully.
-
-The progress of the task should be exposed via the API so that a web client can monitor it.
-Canceling a task that is being executed should be possible, in which case the execution should stop.
-
-### Task 3: Periodically clean up the tasks
-
-The API can be used to create tasks, but the user is not required to execute those tasks.
-The tasks that are not executed after an extended period (e.g. a week) should be periodically cleaned up (deleted).
+2. Task Submitter :
+   1. Exposes POST end-point that accepts request body with task description (initial value, limit value)
+   2. Creates task id 
+   3. Submits create task with task id command to queue topic ``process_task_topic``
+   4. Submits initial status task command to queue topic ``task_status_topic``
+   5. Immidiatly returns created status
+   
+3. Task Processor:
+   1. Leverages competing consumers pattern: listenes to  ``process_task_topic``
+   2. Performs deduplication based on task id
+   3. If task is new --> creates new background job based on task information. 
+   4. If task is not new --> continies execution: as side effect continuesly pushes task status, value and id to ``task_status_topic``
+   5. Uses optimistic locking 
+   6. Exposes one DELETE end-point that cancells task execution (as side effect --> sends command to ``task_status_topic``)
+   
+4. Task Status Provider 
+   1. listenes to  ``task_status_topic``, 
+   2. accumulates events based on task task id
+   3. flushes in batches accumulated events: updates, (at separate DB?), task status, id, accumulated value
+   4. Exposes one GET end-point that fetches current task status + caches result from read replica DB

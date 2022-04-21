@@ -10,9 +10,10 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @Component
-public class SimpleHeaderFilter extends OncePerRequestFilter {
+public class HttpSecurityFilter extends OncePerRequestFilter {
 
     private final String HEADER_NAME = "Celonis-Auth";
+    // TODO: Security concern: this header should be picked from env variables
     private final String HEADER_VALUE = "totally_secret";
 
     @Override
@@ -27,7 +28,7 @@ public class SimpleHeaderFilter extends OncePerRequestFilter {
 
         String val = request.getHeader(HEADER_NAME);
         if (val == null || !val.equals(HEADER_VALUE)) {
-            response.setStatus(401);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().append("Not authorized");
             return;
         }
